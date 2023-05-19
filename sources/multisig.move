@@ -107,10 +107,11 @@ module Multisig::Multisig {
         if(!vec_map::contains<address, u64>(&multi_signature.participants_by_weight ,&user)){
             return result
         };
-        let len = table::length<u256,Proposal>(&multi_signature.pending_proposals);
+        let pending_proposals_table = &multi_signature.pending_proposals;
+        let len = table::length<u256,Proposal>(pending_proposals_table);
         let index: u64 = 0;
         while (index < len) { 
-            let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, (index as u256));
+            let proposal = table::borrow<u256, Proposal>(pending_proposals_table, (index as u256));
             vector::push_back<u256>(&mut result, proposal.id);
             index = index + 1;
         };
