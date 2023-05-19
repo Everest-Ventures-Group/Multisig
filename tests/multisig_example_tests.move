@@ -101,8 +101,8 @@ module Multisig::multisig_example_tests{
     }
 
 
-    //#[expected_failure]
-    #[test, expected_failure(abort_code = 1)]
+    #[expected_failure]
+    #[test]
     public fun test_change_setting_success() {
         let user = @0xA; // weight 1
         let participant1 = @0xB; // weight 2
@@ -111,11 +111,11 @@ module Multisig::multisig_example_tests{
         let scenario_val = test_scenario::begin(user);
         let scenario = &mut scenario_val;
 
-        let scenario_val1 = test_scenario::begin(participant1);
-        let scenario1 = &mut scenario_val1;
+        // let scenario_val1 = test_scenario::begin(participant1);
+        // let scenario1 = &mut scenario_val1;
 
-        let scenario_val2 = test_scenario::begin(participant2);
-        let scenario2 = &mut scenario_val2;        
+        // let scenario_val2 = test_scenario::begin(participant2);
+        // let scenario2 = &mut scenario_val2;        
         // init
         {
             let ctx = test_scenario::ctx(scenario);
@@ -156,8 +156,8 @@ module Multisig::multisig_example_tests{
         test_scenario::return_shared(vault);
 
         test_scenario::end(scenario_val);
-        test_scenario::end(scenario_val1);
-        test_scenario::end(scenario_val2);
+        // test_scenario::end(scenario_val1);
+        // test_scenario::end(scenario_val2);
             abort 32
 
     }

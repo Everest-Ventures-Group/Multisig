@@ -47,36 +47,36 @@ module Multisig::Multisig {
         complete_proposals: Table<u256, Proposal>
     }
 
-    public fun create_multisig(tx: &mut TxContext): MultiSignature{
+    public fun create_multisig(_tx: &mut TxContext): MultiSignature{
         let participants_by_weight = vec_map::empty<address,u64>();
-        vec_map::insert(&mut participants_by_weight, tx_context::sender(tx), 1);
-        MultiSignature { id: object::new(tx), participants_by_weight, threshold: 1, proposal_index: 0, pending_proposals: table::new<u256, Proposal>(tx), complete_proposals: table::new<u256, Proposal>(tx)}
+        vec_map::insert(&mut participants_by_weight, tx_context::sender(_tx), 1);
+        MultiSignature { id: object::new(_tx), participants_by_weight, threshold: 1, proposal_index: 0, pending_proposals: table::new<u256, Proposal>(_tx), complete_proposals: table::new<u256, Proposal>(_tx)}
     }
 
     /// only participants can call multisig_setting_execute
-    public fun create_proposal<T: store + key>(multi_signature: &mut MultiSignature, description: vector<u8>, type: u64, request: T, tx: &mut TxContext){
+    public fun create_proposal<T: store + key>(multi_signature: &mut MultiSignature, description: vector<u8>, type: u64, request: T, _tx: &mut TxContext){
         // only participants
-        let value = object_bag::new(tx);
-        object_bag::add(&mut value, 0, request);
+        let value = object_bag::new(_tx);
+        object_bag::add<u256, T>(&mut value, 0, request);
         let id = multi_signature.proposal_index;
         let for = object::uid_as_inner(&multi_signature.id);
         table::add<u256, Proposal>(&mut multi_signature.pending_proposals, id, 
-            Proposal{ id, for: *for, description, type, value, approved_weight: 0, reject_weight: 0, participants_voted: table::new<address, bool>(tx)});
+            Proposal{ id, for: *for, description, type, value, approved_weight: 0, reject_weight: 0, participants_voted: table::new<address, bool>(_tx)});
         multi_signature.proposal_index = id + 1;
-        event::emit(ProposalCreatedEvent{id, type, description, creator: tx_context::sender(tx)});
+        event::emit(ProposalCreatedEvent{id, type, description, creator: tx_context::sender(_tx)});
     }
 
     /// only participants can call multisig_setting_execute
-    public fun create_multisig_setting_proposal(multi_signature: &mut MultiSignature, description: vector<u8>, participants_by_weight: VecMap<address, u64>, participants_remove: vector<address>, tx: &mut TxContext){
-        let request = MultiSignatureSetting{ id: object::new(tx),  participants_by_weight, participants_remove};
-        create_proposal<MultiSignatureSetting>(multi_signature, description, 0, request, tx)
+    public fun create_multisig_setting_proposal(multi_signature: &mut MultiSignature, description: vector<u8>, participants_by_weight: VecMap<address, u64>, participants_remove: vector<address>, _tx: &mut TxContext){
+        let request = MultiSignatureSetting{ id: object::new(_tx),  participants_by_weight, participants_remove};
+        create_proposal<MultiSignatureSetting>(multi_signature, description, 0, request, _tx)
     }
 
     /// only participants can call multisig_setting_execute
-    public fun vote(multi_signature: &mut MultiSignature, proposal_id: u256, is_approve: bool, tx: &mut TxContext){
+    public fun vote(multi_signature: &mut MultiSignature, proposal_id: u256, is_approve: bool, _tx: &mut TxContext){
         // only participants
         let proposal = table::borrow_mut<u256, Proposal>(&mut multi_signature.pending_proposals, proposal_id);
-        let sender: address = tx_context::sender(tx);
+        let sender: address = tx_context::sender(_tx);
 
         if(is_approve){
             proposal.approved_weight = proposal.approved_weight + *vec_map::get<address, u64>(&multi_signature.participants_by_weight, &sender);
@@ -89,7 +89,7 @@ module Multisig::Multisig {
 
     /// mark complete, should be called when business is executed on user module
     /// only any weight > threshold can complete
-    public fun mark_proposal_complete(multi_signature: &mut MultiSignature, proposal_id: u256, tx: &mut TxContext){
+    public fun mark_proposal_complete(multi_signature: &mut MultiSignature, proposal_id: u256, _tx: &mut TxContext){
         let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
         assert!(proposal.approved_weight >= multi_signature.threshold || proposal.reject_weight >= multi_signature.threshold, ECanNotFinish);
 
@@ -100,7 +100,7 @@ module Multisig::Multisig {
 
     // list all pending proposal
     // return vector of (proposal_id, type, description)
-    public fun pending_proposals(multi_signature: &MultiSignature, user: address, tx: &TxContext): vector<u256>{
+    public fun pending_proposals(multi_signature: &MultiSignature, user: address, _tx: &TxContext): vector<u256>{
         // proposal_id, type, description
         let result = vector::empty<u256>();
         // filter participant
@@ -196,8 +196,8 @@ module Multisig::Multisig {
 
 spec Multisig::Multisig{
     spec schema OnlyParticipant{
-        requires vec_map::contains<address,u64>(multi_signature.participants_by_weight, &tx_context::sender(tx));
-        requires vec_map::get<address, u64>(multi_signature.participants_by_weight, &tx_context::sender(tx)) > 0;
+        requires vec_map::contains<address,u64>(multi_signature.participants_by_weight, &tx_context::sender(_tx));
+        requires vec_map::get<address, u64>(multi_signature.participants_by_weight, &tx_context::sender(_tx)) > 0;
     }
     /// only PendingProposal can continue
     spec schema PendingProposal{
@@ -216,7 +216,7 @@ spec Multisig::Multisig{
         // user not voted
         let proposal = table::borrow<u256, Proposal>(multi_signature.pending_proposals, proposal_id);
         requires !table::contains<address, bool>(proposal.participants_voted);
-        requires !*table::borrow<address, bool>(proposal.participants_voted, tx_context::sender(tx));
+        requires !*table::borrow<address, bool>(proposal.participants_voted, tx_context::sender(_tx));
     }
     spec create_proposal{
         include OnlyParticipant;

@@ -29,7 +29,7 @@ module Multisig::Example {
     }
 
     // create a mint request
-    public fun mint_request(vault: &Vault, multi_signature: &mut MultiSignature, mint_to: address, amount: u256, tx: &mut TxContext){
+    public fun mint_request(_: &Vault, multi_signature: &mut MultiSignature, mint_to: address, amount: u256, tx: &mut TxContext){
         // only vault for cashier
         // only participant
         assert!(Multisig::is_participant(multi_signature, tx_context::sender(tx)), 1);
@@ -38,7 +38,7 @@ module Multisig::Example {
     }
 
     // execute mint
-    public fun mint_execute(vault: &Vault,  multi_signature: &mut MultiSignature, proposal_id: u256,  tx: &mut TxContext){
+    public fun mint_execute(_: &Vault,  multi_signature: &mut MultiSignature, proposal_id: u256,  tx: &mut TxContext){
         // only vault for cashier
 
         assert!(Multisig::is_participant(multi_signature, tx_context::sender(tx)), 1);
@@ -49,7 +49,8 @@ module Multisig::Example {
         }
     }
 
-    fun mint(request: &MintRequest){
+    fun mint(_: &MintRequest){
         // called
+        
     }
 }
