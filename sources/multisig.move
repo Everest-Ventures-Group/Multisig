@@ -138,36 +138,40 @@ module Multisig::Multisig {
     }
 
     /// borrow the original business request body
-    public fun borrow_proposal_request<T: store + key>(multi_signature: &mut MultiSignature, proposal_id: u256): &T {
+    public fun borrow_proposal_request<T: store + key>(multi_signature: &MultiSignature, proposal_id: u256): &T {
         let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
         object_bag::borrow<u256, T>(&proposal.value, 0)
     }
 
     /// change the multisig setting
     /// only participants can call multisig_setting_execute
-    public fun multisig_setting_execute(multi_signature: &mut MultiSignature, proposal_id: u256, setting_request: &MultiSignatureSetting, tx: &mut TxContext){
+    public fun multisig_setting_execute(multi_signature: &mut MultiSignature, proposal_id: u256, tx: &mut TxContext){
         let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
+        let setting_request = borrow_proposal_request<MultiSignatureSetting>(multi_signature, proposal_id);
         assert!(proposal.approved_weight >= multi_signature.threshold || proposal.reject_weight >= multi_signature.threshold, ECanNotFinish);
         if(proposal.approved_weight >= multi_signature.threshold){
             let len = vector::length<address>(&setting_request.participants_remove);
             let index: u64 = 0;
+            let participants_by_weight = multi_signature.participants_by_weight;
             loop{
                 // remove the old participants
-                vec_map::remove<address, u64>(&mut multi_signature.participants_by_weight, vector::borrow<address>(&setting_request.participants_remove, index));
+                vec_map::remove<address, u64>(&mut participants_by_weight, vector::borrow<address>(&setting_request.participants_remove, index));
                 index = index + 1;
                 if(index >= len){
                     break
                 };
             };
-            let table_len = vec_map::size<address, u64>(&setting_request.participants_by_weight);
+            let keys = vec_map::keys<address, u64>(&mut participants_by_weight);
+            let table_len = vector::length<address>(&keys);
             index = 0;
             let cnt = 0;
             loop{
-                let (k, v) = vec_map::get_entry_by_idx(&setting_request.participants_by_weight, index);
+                let key = vector::pop_back<address>(&mut keys);
+                let (k,v) = vec_map::remove<address, u64>(&mut participants_by_weight, &key);
                 // each weight should > 0
-                assert!(*v > 0, EInvalidArguments);
-                vec_map::insert<address, u64>(&mut multi_signature.participants_by_weight, *k, *v);
-                cnt = cnt + *v;
+                assert!(v > 0, EInvalidArguments);
+                vec_map::insert<address, u64>(&mut participants_by_weight, k, v);
+                cnt = cnt + v;
                 index = index +1;
                 if(index >= table_len){
                     break
