@@ -157,8 +157,11 @@ module multisig::multisig {
     }
 
     // 1) business side take proposal  2) take request  3) drop request 4) add to complete 
-    public fun extract_proposal_request(multi_signature: &mut MultiSignature, proposal_id: u256): Proposal{
-        table::remove<u256, Proposal>(&mut multi_signature.pending_proposals, proposal_id)
+    public fun extract_proposal_request<T: store + key>(multi_signature: &mut MultiSignature, proposal_id: u256): T{
+        let proposals = &mut multi_signature.pending_proposals;
+        let proposal = table::borrow_mut<u256, Proposal>(proposals, proposal_id);
+        let v = extract_request<T>(proposal);
+        v
     }
 
     fun extract_request<T: store + key>(proposal: &mut Proposal): T{
