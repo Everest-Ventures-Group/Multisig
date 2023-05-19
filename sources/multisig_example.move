@@ -1,9 +1,9 @@
-module Multisig::Example {
+module multisig::Example {
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID, UID};
     use sui::transfer;
  
-    use Multisig::Multisig::{Self, MultiSignature};
+    use multisig::multisig::{Self, MultiSignature};
 
     struct MintRequest has store, key{
         id: UID,
@@ -18,7 +18,7 @@ module Multisig::Example {
     }
 
     fun init(tx: &mut TxContext){
-        let multi_sig = Multisig::create_multisig(tx);
+        let multi_sig = multisig::create_multisig(tx);
         transfer::share_object(Vault{ id: object::new(tx), for_admin: object::id(&multi_sig), for_cashier: object::id(&multi_sig)});
         transfer::public_share_object(multi_sig)
     }
@@ -32,8 +32,8 @@ module Multisig::Example {
     public fun mint_request(_: &Vault, multi_signature: &mut MultiSignature, mint_to: address, amount: u256, tx: &mut TxContext){
         // only vault for cashier
         // only participant
-        assert!(Multisig::is_participant(multi_signature, tx_context::sender(tx)), 1);
-        Multisig::create_proposal(multi_signature, b"create to @mint_to", 1, MintRequest{id: object::new(tx), mint_to, amount}, tx);
+        assert!(multisig::is_participant(multi_signature, tx_context::sender(tx)), 1);
+        multisig::create_proposal(multi_signature, b"create to @mint_to", 1, MintRequest{id: object::new(tx), mint_to, amount}, tx);
         
     }
 
@@ -41,11 +41,11 @@ module Multisig::Example {
     public fun mint_execute(_: &Vault,  multi_signature: &mut MultiSignature, proposal_id: u256,  tx: &mut TxContext){
         // only vault for cashier
 
-        assert!(Multisig::is_participant(multi_signature, tx_context::sender(tx)), 1);
-        if(Multisig::is_proposal_approved(multi_signature, proposal_id)){
-            let request = Multisig::borrow_proposal_request<MintRequest>(multi_signature, proposal_id);
+        assert!(multisig::is_participant(multi_signature, tx_context::sender(tx)), 1);
+        if(multisig::is_proposal_approved(multi_signature, proposal_id)){
+            let request = multisig::borrow_proposal_request<MintRequest>(multi_signature, proposal_id);
             mint(request);
-            Multisig::Multisig::mark_proposal_complete(multi_signature, proposal_id, tx);
+            multisig::multisig::mark_proposal_complete(multi_signature, proposal_id, tx);
         }
     }
 
