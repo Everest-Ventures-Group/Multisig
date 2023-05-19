@@ -153,6 +153,7 @@ module Multisig::Multisig {
             let len = vector::length<address>(&setting_request.participants_remove);
             let index: u64 = 0;
             let participants_by_weight = multi_signature.participants_by_weight;
+            let new_participants_by_weight = setting_request.participants_by_weight;
             loop{
                 // remove the old participants
                 vec_map::remove<address, u64>(&mut participants_by_weight, vector::borrow<address>(&setting_request.participants_remove, index));
@@ -161,21 +162,19 @@ module Multisig::Multisig {
                     break
                 };
             };
-            let keys = vec_map::keys<address, u64>(&mut participants_by_weight);
-            let table_len = vector::length<address>(&keys);
-            index = 0;
+            let keys = vec_map::keys<address, u64>(&mut new_participants_by_weight);
+            let keys_ref = &mut keys;
             let cnt = 0;
             loop{
-                let key = vector::pop_back<address>(&mut keys);
-                let (k,v) = vec_map::remove<address, u64>(&mut participants_by_weight, &key);
+                if(vector::length(keys_ref) == 0){
+                    break
+                };
+                let key = vector::pop_back<address>(keys_ref);
+                let (k,v) = vec_map::remove<address, u64>(&mut new_participants_by_weight, &key);
                 // each weight should > 0
                 assert!(v > 0, EInvalidArguments);
                 vec_map::insert<address, u64>(&mut participants_by_weight, k, v);
                 cnt = cnt + v;
-                index = index +1;
-                if(index >= table_len){
-                    break
-                };  
             };
             // sum of weights should > 0
             assert!(cnt > 0, EInvalidArguments);
