@@ -72,13 +72,28 @@ module multisig::multisig {
     }
 
     /// only participants can call multisig_setting_execute
-    public fun create_multisig_setting_proposal(multi_signature: &mut MultiSignature, description: vector<u8>, participants_by_weight: VecMap<address, u64>, participants_remove: vector<address>, _tx: &mut TxContext){
+    public entry fun create_multisig_setting_proposal(multi_signature: &mut MultiSignature, description: vector<u8>, participants: vector<address>, participant_weights: vector<u64>, participants_remove: vector<address>, _tx: &mut TxContext){
+        let participant_ref = &mut participants;
+        let participant_weights_ref = &mut participant_weights;
+        let len = vector::length<address>(participant_ref);
+        assert!(len == vector::length<u64>(participant_weights_ref), EInvalidArguments);
+        assert!(len > 0, EInvalidArguments);
+        let index = 0;
+        let participants_by_weight: VecMap<address, u64> = vec_map::empty<address, u64>();
+
+        loop{
+            vec_map::insert(&mut participants_by_weight, vector::pop_back<address>(participant_ref), vector::pop_back<u64>(&mut participant_weights));
+            index = index + 1;
+            if(index >= len){
+                break
+            };
+        };
         let request = MultiSignatureSetting{ id: object::new(_tx),  participants_by_weight, participants_remove};
         create_proposal<MultiSignatureSetting>(multi_signature, description, 0, request, _tx)
     }
 
     /// only participants can call multisig_setting_execute
-    public fun vote(multi_signature: &mut MultiSignature, proposal_id: u256, is_approve: bool, _tx: &mut TxContext){
+    public entry fun vote(multi_signature: &mut MultiSignature, proposal_id: u256, is_approve: bool, _tx: &mut TxContext){
         // only participants
         let proposal = table::borrow_mut<u256, Proposal>(&mut multi_signature.pending_proposals, proposal_id);
         let sender: address = tx_context::sender(_tx);
@@ -110,7 +125,7 @@ module multisig::multisig {
 
     // list all pending proposal
     // return vector of (proposal_id, type, description)
-    public fun pending_proposals(multi_signature: &MultiSignature, user: address, _tx: &TxContext): vector<u256>{
+    public entry fun pending_proposals(multi_signature: &MultiSignature, user: address, _tx: &TxContext): vector<u256>{
         // proposal_id, type, description
         let result = vector::empty<u256>();
         let result_mut = &mut result;
@@ -130,22 +145,28 @@ module multisig::multisig {
         result
     }
 
-    public fun pending_proposal_description(multi_signature: &MultiSignature, proposal_id: u256): vector<u8>{
+    #[test_only]
+    public fun debug_multisig(multi_signature: &MultiSignature){
+        use std::debug;
+        debug::print(multi_signature);
+    }
+
+    public entry fun pending_proposal_description(multi_signature: &MultiSignature, proposal_id: u256): vector<u8>{
         let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
         proposal.description
     }
 
-    public fun pending_proposal_type(multi_signature: &MultiSignature, proposal_id: u256): u64{
+    public entry fun pending_proposal_type(multi_signature: &MultiSignature, proposal_id: u256): u64{
         let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
         proposal.type
     }
 
-    public fun is_proposal_approved(multi_signature: &mut MultiSignature, proposal_id: u256): bool{
+    public entry fun is_proposal_approved(multi_signature: &mut MultiSignature, proposal_id: u256): bool{
         let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
         return proposal.approved_weight >= multi_signature.threshold
     }
 
-    public fun is_proposal_rejected(multi_signature: &mut MultiSignature, proposal_id: u256): bool{
+    public entry fun is_proposal_rejected(multi_signature: &mut MultiSignature, proposal_id: u256): bool{
         let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
         return proposal.reject_weight >= multi_signature.threshold
     }
@@ -168,30 +189,33 @@ module multisig::multisig {
         object_bag::remove<u256, T>(&mut proposal.value, 0)
     }
 
-    fun borrow_request<T: store + key>(proposal: &Proposal): &T{
-        object_bag::borrow<u256, T>(& proposal.value, 0)
+    fun borrow_request<T: store + key>(proposal: &Proposal): & T{
+        object_bag::borrow<u256, T>(&proposal.value, 0)
     }
 
     /// change the multisig setting
     /// only participants can call multisig_setting_execute
     public fun multisig_setting_execute(multi_signature: &mut MultiSignature, proposal_id: u256, tx: &mut TxContext){
-        let proposal = table::borrow<u256, Proposal>(&mut multi_signature.pending_proposals, proposal_id);
+        let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
         let setting_request = borrow_request<MultiSignatureSetting>(proposal);
-        assert!(proposal.approved_weight >= multi_signature.threshold || proposal.reject_weight >= multi_signature.threshold, ECanNotFinish);
-        if(proposal.approved_weight >= multi_signature.threshold){
+        let approved_weight = proposal.approved_weight;
+        let reject_weight = proposal.reject_weight;
+        assert!(approved_weight >= multi_signature.threshold || reject_weight >= multi_signature.threshold, ECanNotFinish);
+        if(approved_weight >= multi_signature.threshold){
             let len = vector::length<address>(&setting_request.participants_remove);
             let index: u64 = 0;
-            let participants_by_weight = multi_signature.participants_by_weight;
-            let new_participants_by_weight = setting_request.participants_by_weight;
+            let participants_by_weight = &mut multi_signature.participants_by_weight;
+            let new_participants_by_weight = &setting_request.participants_by_weight;
             loop{
                 // remove the old participants
-                vec_map::remove<address, u64>(&mut participants_by_weight, vector::borrow<address>(&setting_request.participants_remove, index));
+                vec_map::remove<address, u64>( participants_by_weight, vector::borrow<address>(&setting_request.participants_remove, index));
                 index = index + 1;
                 if(index >= len){
                     break
                 };
             };
-            let keys = vec_map::keys<address, u64>(&mut new_participants_by_weight);
+            let keys = vec_map::keys<address, u64>( new_participants_by_weight);
+            let keys_len = vec_map::size<address, u64>( new_participants_by_weight);
             let keys_ref = &mut keys;
             let cnt = 0;
             loop{
@@ -199,21 +223,17 @@ module multisig::multisig {
                     break
                 };
                 let key = vector::pop_back<address>(keys_ref);
-                let (k,v) = vec_map::remove<address, u64>(&mut new_participants_by_weight, &key);
+                let v = vec_map::get<address, u64>( new_participants_by_weight, &key);
                 // each weight should > 0
-                assert!(v > 0, EInvalidArguments);
-                vec_map::insert<address, u64>(&mut participants_by_weight, k, v);
-                cnt = cnt + v;
+                assert!(*v > 0, EInvalidArguments);
+                vec_map::insert<address, u64>( participants_by_weight, copy key, *v);
+                cnt = cnt + *v;
             };
             // sum of weights should > 0
             assert!(cnt > 0, EInvalidArguments);
+            assert!(keys_len == vec_map::size<address, u64>(participants_by_weight), EInvalidArguments);
         };
         mark_proposal_complete(multi_signature, proposal_id, tx);
-    }
-
-    public fun borrow_multisig_setting(multi_signature: &mut MultiSignature, proposal_id: u256): &mut MultiSignatureSetting {
-        let proposal = table::borrow_mut<u256, Proposal>(&mut multi_signature.pending_proposals, proposal_id);
-        object_bag::borrow_mut<u256, MultiSignatureSetting>(&mut proposal.value, 0)
     }
 
     /// is user belong to this multi_signature
@@ -272,10 +292,6 @@ spec multisig::multisig{
     spec extract_proposal{
         include PendingProposal;
         include ValidProposalFor;        
-    }
-    spec borrow_multisig_setting{
-        include PendingProposal;
-        include ValidProposalFor;
     }
 
 }
