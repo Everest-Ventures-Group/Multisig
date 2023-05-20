@@ -1,6 +1,6 @@
 #[test_only]
 module multisig::multisig_example_tests{
-    use multisig::multisig::{MultiSignature};
+    use multisig::multisig::{MultiSignature, EInvalidArguments, ENotAuthorized};
     use multisig::Example::{Self, Vault};
     use sui::test_scenario::{Self, Scenario};
     use std::vector::{Self};
@@ -69,17 +69,12 @@ module multisig::multisig_example_tests{
 
     }
 
-    #[expected_failure]
+    #[expected_failure(abort_code = EInvalidArguments)]
     #[test]
-    public fun test_change_setting_access_deny() {
-        let user = @0xA;
-        let participant1 = @0xB;
-
-        let scenario_val = test_scenario::begin(user);
+    public fun test_invalid_proposal() {
+        let scenario_val = test_scenario::begin(USER);
         let scenario = &mut scenario_val;
 
-        let scenario_val1 = test_scenario::begin(participant1);
-        let scenario1 = &mut scenario_val1;
         // init
         {
             let ctx = test_scenario::ctx(scenario);
@@ -89,16 +84,21 @@ module multisig::multisig_example_tests{
         let multi_sig: MultiSignature;
         let vault: Vault;
         // mint request
-        test_scenario::next_tx(scenario, user);
+        test_scenario::next_tx(scenario, USER);
         {
             multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
             vault = test_scenario::take_shared<Vault>(scenario);
-            let participants = vector::empty<address>();
-            let participant_weights = vector::empty<u64>();
+            let participants = participant_vector();
+            let participant_weights = weight_vector();
 
             let remove = vector::empty<address>();
             // create proposal using a unauthorized user
-            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, test_scenario::ctx(scenario1));
+            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, test_scenario::ctx(scenario));
+        };
+        test_scenario::next_tx(scenario, USER);
+        {
+            // invalid 
+            multisig::multisig::vote(&mut multi_sig, 33, true, test_scenario::ctx(scenario));
         };
         
         // end
@@ -106,7 +106,40 @@ module multisig::multisig_example_tests{
         test_scenario::return_shared(vault);
 
         test_scenario::end(scenario_val);
-        test_scenario::end(scenario_val1);
+    }
+
+    #[expected_failure(abort_code = ENotAuthorized)]
+    #[test]
+    public fun test_change_setting_access_deny() {
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+
+        let multi_sig: MultiSignature;
+        let vault: Vault;
+        // mint request
+        test_scenario::next_tx(scenario, UNAUTHORIZED);
+        {
+            multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
+            vault = test_scenario::take_shared<Vault>(scenario);
+            let participants = participant_vector();
+            let participant_weights = weight_vector();
+
+            let remove = vector::empty<address>();
+            // create proposal using a unauthorized user
+            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, test_scenario::ctx(scenario));
+        };
+        
+        // end
+        test_scenario::return_shared(multi_sig);
+        test_scenario::return_shared(vault);
+
+        test_scenario::end(scenario_val);
     }
 
     fun change_setting(participants: vector<address>, participant_weights: vector<u64>,  remove: vector<address>, scenario: &mut Scenario ){
