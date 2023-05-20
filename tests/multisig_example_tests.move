@@ -1,6 +1,6 @@
 #[test_only]
 module multisig::multisig_example_tests{
-    use multisig::multisig::{MultiSignature, EInvalidArguments, ENotAuthorized};
+    use multisig::multisig::{MultiSignature, EInvalidArguments, ENotAuthorized, EVoted};
     use multisig::Example::{Self, Vault};
     use sui::test_scenario::{Self, Scenario};
     use std::vector::{Self};
@@ -246,7 +246,7 @@ module multisig::multisig_example_tests{
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure]
+    #[expected_failure(abort_code = EVoted)]
     #[test]
     public fun test_mint_multi_duplicate_vote() {
 

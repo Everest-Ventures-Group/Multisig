@@ -11,6 +11,7 @@ module multisig::multisig {
     const ECanNotFinish: u64 = 2;
     const EInvalidArguments: u64 = 3;
     const ENotAuthorized: u64 = 4;
+    const EVoted: u64 = 5;
 
     const PROPOSAL_TYPE_MULTISIG_SETTING: u64 = 0;
     
@@ -20,13 +21,31 @@ module multisig::multisig {
         participants_by_weight: VecMap<address, u64>, // address, weight
     }
 
-    // event
+    // event start
     struct ProposalCreatedEvent has copy, drop{
         id: u256,
+        for: ID,
         type: u64,
         description: vector<u8>,
         creator: address
     }
+
+    struct ProposalVotedEvent has copy, drop{
+        id: u256,
+        for: ID,
+        type: u64,
+        voter: address
+    }
+
+    struct ProposalExecutedEvent has copy, drop{
+        id: u256,
+        for: ID,
+        type: u64,
+        executor: address
+    }
+
+    // event end
+
 
     struct Proposal has store {
         id: u256,
@@ -36,7 +55,8 @@ module multisig::multisig {
         value: ObjectBag,
         approved_weight: u64,
         reject_weight: u64,
-        participants_voted: Table<address, bool>
+        participants_voted: Table<address, bool>,
+        creator: address
     }
 
     struct MultiSignature has store, key{
@@ -67,11 +87,11 @@ module multisig::multisig {
         let id = multi_signature.proposal_index;
         let for = object::uid_as_inner(&multi_signature.id);
         table::add<u256, Proposal>(&mut multi_signature.pending_proposals, id, 
-            Proposal{ id, for: *for, description, type, value, approved_weight: 0, reject_weight: 0, participants_voted: table::new<address, bool>(_tx)});
+            Proposal{ id, for: *for, description, type, value, approved_weight: 0, reject_weight: 0, participants_voted: table::new<address, bool>(_tx), creator: tx_context::sender(_tx)});
         
         vector::push_back(&mut multi_signature.pending_proposal_ids, id);
         multi_signature.proposal_index = id + 1;
-        event::emit(ProposalCreatedEvent{id, type, description, creator: tx_context::sender(_tx)});
+        event::emit(ProposalCreatedEvent{id, type, for: *for, description, creator: tx_context::sender(_tx)});
     }
 
     /// only participants can call multisig_setting_execute
@@ -102,7 +122,9 @@ module multisig::multisig {
         onlyParticipant(multi_signature, _tx);
         onlyPendingProposal(multi_signature, proposal_id);
         onlyValidProposalFor(multi_signature, proposal_id);
-       
+        // only not voted
+        onlyNotVoted(multi_signature, proposal_id, tx_context::sender(_tx));
+    
 
         // only participants
         let proposal = table::borrow_mut<u256, Proposal>(&mut multi_signature.pending_proposals, proposal_id);
@@ -213,9 +235,14 @@ module multisig::multisig {
         object_bag::borrow<u256, T>(&proposal.value, 0)
     }
 
+    /// get participants of the multisig
+    public entry fun get_participants(multi_signature: &MultiSignature): vector<address>{
+        vec_map::keys<address, u64>(&multi_signature.participants_by_weight)
+    }
+
     /// change the multisig setting
     /// only participants can call multisig_setting_execute
-    public fun multisig_setting_execute(multi_signature: &mut MultiSignature, proposal_id: u256, _tx: &mut TxContext){
+    public entry fun multisig_setting_execute(multi_signature: &mut MultiSignature, proposal_id: u256, _tx: &mut TxContext){
         onlyParticipant(multi_signature, _tx);
         onlyPendingProposal(multi_signature, proposal_id);
         onlyValidProposalFor(multi_signature, proposal_id);
@@ -282,6 +309,12 @@ module multisig::multisig {
         let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
         let for = object::uid_to_inner(&multi_signature.id);
         assert!(proposal.for == for, EInvalidArguments);        
+    }
+    
+    fun onlyNotVoted(multi_signature: &mut MultiSignature, proposal_id: u256, sender: address){
+        let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
+        let voted = &proposal.participants_voted;
+        assert!(!table::contains<address, bool>(voted, sender), EVoted);
     }
 
 
