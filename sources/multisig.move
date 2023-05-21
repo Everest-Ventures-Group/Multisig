@@ -137,6 +137,9 @@ module multisig::multisig {
         };
         // marked voted
         table::add<address, bool>(&mut proposal.participants_voted, sender, true);
+        let for = object::uid_as_inner(&multi_signature.id);
+
+        event::emit(ProposalVotedEvent{id: proposal_id, for: *for, type: proposal.type, voter: sender});
     }
 
     /// mark complete, should be called when business is executed on user module
@@ -146,18 +149,22 @@ module multisig::multisig {
         onlyPendingProposal(multi_signature, proposal_id);
         onlyValidProposalFor(multi_signature, proposal_id);
 
-
-        let proposal = table::borrow<u256, Proposal>(&multi_signature.pending_proposals, proposal_id);
-        assert!(proposal.approved_weight >= multi_signature.threshold || proposal.reject_weight >= multi_signature.threshold, ECanNotFinish);
-
-        let removed = table::remove<u256, Proposal>(&mut multi_signature.pending_proposals, proposal_id);
+        assert!(is_proposal_approved(multi_signature, proposal_id) || is_proposal_rejected(multi_signature, proposal_id), ECanNotFinish);
+        
+        let pending_proposals = &mut multi_signature.pending_proposals;
+        let removed = table::remove<u256, Proposal>(pending_proposals, proposal_id);
         //add to complete proposal
         let proposal_ids = &mut multi_signature.pending_proposal_ids;
         let (exist, idx) = vector::index_of<u256>(proposal_ids, &proposal_id);
         if(exist){
-            vector::remove(&mut multi_signature.pending_proposal_ids, idx);
+            vector::remove(proposal_ids, idx);
         };
-        table::add<u256, Proposal>(&mut multi_signature.complete_proposals, proposal_id, removed);
+        let complete_proposals =&mut multi_signature.complete_proposals;
+        let type  = removed.type;
+        table::add<u256, Proposal>(complete_proposals, proposal_id, removed); 
+        let for = object::uid_as_inner(&multi_signature.id);
+        event::emit(ProposalExecutedEvent{id: proposal_id, for: *for, type, executor: tx_context::sender(_tx)});
+        
     }
 
     // list all pending proposal

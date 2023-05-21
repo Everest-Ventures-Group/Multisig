@@ -1,11 +1,13 @@
 [package]
 name = "multisig"
-version = "0.0.1"
-
+version = "0.0.2"
+# published-at = ""
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "main" }
 
 [addresses]
 multisig = "0x0"
-Sui = "0x02"
+Sui = "0000000000000000000000000000000000000000000000000000000000000002"
+
+[dev-addresses]
