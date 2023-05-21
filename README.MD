@@ -77,3 +77,15 @@ instead of
 ```rust
 multisig::borrow_proposal_request<MintRequest>(multi_signature, proposal_id);
 ```
+
+
+# package address
+## devnet
+https://suiexplorer.com/object/0xe4f251af57e158b078eb150a4f394b38b3454421c0b0bab6ebadaf7dc75ea3f2?module=multisig&network=devnet
+
+0xe4f251af57e158b078eb150a4f394b38b3454421c0b0bab6ebadaf7dc75ea3f2::multisig
+
+## testnet
+TBD
+## mainnet
+TBD
