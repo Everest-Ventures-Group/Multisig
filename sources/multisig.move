@@ -265,6 +265,9 @@ module multisig::multisig {
             let participants_by_weight = &mut multi_signature.participants_by_weight;
             let new_participants_by_weight = &setting_request.participants_by_weight;
             loop{
+                if(vector::length(&setting_request.participants_remove) == 0){
+                    break
+                };
                 // remove the old participants
                 vec_map::remove<address, u64>( participants_by_weight, vector::borrow<address>(&setting_request.participants_remove, index));
                 index = index + 1;
