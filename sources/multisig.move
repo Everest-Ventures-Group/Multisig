@@ -276,7 +276,6 @@ module multisig::multisig {
                 };
             };
             let keys = vec_map::keys<address, u64>( new_participants_by_weight);
-            let keys_len = vec_map::size<address, u64>( new_participants_by_weight);
             let keys_ref = &mut keys;
             let cnt = 0;
             loop{
@@ -292,7 +291,6 @@ module multisig::multisig {
             };
             // sum of weights should > 0
             assert!(cnt > 0, EInvalidArguments);
-            assert!(keys_len == vec_map::size<address, u64>(participants_by_weight), EInvalidArguments);
         };
         mark_proposal_complete(multi_signature, proposal_id, _tx);
     }
