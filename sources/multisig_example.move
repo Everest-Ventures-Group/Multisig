@@ -43,7 +43,8 @@ module multisig::Example {
         // only vault for cashier
 
         assert!(multisig::is_participant(multi_signature, tx_context::sender(tx)), 1);
-        if(multisig::is_proposal_approved(multi_signature, proposal_id)){
+        let (is_approved, _) = multisig::is_proposal_approved(multi_signature, proposal_id);
+        if(is_approved){
             let request = multisig::borrow_proposal_request<MintRequest>(multi_signature, &proposal_id, tx);
             mint(request);
             multisig::multisig::mark_proposal_complete(multi_signature, proposal_id, tx);

@@ -159,8 +159,7 @@ module multisig::multisig {
         onlyParticipant(multi_signature, _tx);
         onlyPendingProposal(multi_signature, proposal_id);
         onlyValidProposalFor(multi_signature, proposal_id);
-
-        assert!(is_proposal_approved(multi_signature, proposal_id) || is_proposal_rejected(multi_signature, proposal_id), ECanNotFinish);
+        onlyVoted(multi_signature, proposal_id);
         
         inner_mark_proposal_complete(multi_signature, proposal_id, _tx);
     }
@@ -215,20 +214,22 @@ module multisig::multisig {
         proposal.type
     }
 
-    public fun is_proposal_approved(multi_signature: & MultiSignature, proposal_id: u256): bool{
+    /// return the is_proposal_approved and the approved weight, user can compare the weight with is_proposal_rejected's return or just make a decision by the bool flag
+    public fun is_proposal_approved(multi_signature: & MultiSignature, proposal_id: u256): (bool, u64){
         onlyPendingProposal(multi_signature, proposal_id);
         onlyValidProposalFor(multi_signature, proposal_id);
 
         let proposal = vec_map::get<u256, Proposal>(&multi_signature.pending_proposals, &proposal_id);
-        return proposal.approved_weight >= multi_signature.threshold
+        return (proposal.approved_weight >= multi_signature.threshold, proposal.approved_weight)
     }
 
-    public fun is_proposal_rejected(multi_signature: & MultiSignature, proposal_id: u256): bool{
+    /// return the is_proposal_rejected and the voted weight
+    public fun is_proposal_rejected(multi_signature: & MultiSignature, proposal_id: u256): (bool, u64){
         onlyPendingProposal(multi_signature, proposal_id);
         onlyValidProposalFor(multi_signature, proposal_id);
 
         let proposal = vec_map::get<u256, Proposal>(&multi_signature.pending_proposals, &proposal_id);
-        return proposal.reject_weight >= multi_signature.threshold
+        return (proposal.reject_weight >= multi_signature.threshold,proposal.reject_weight)
     }
 
     public fun borrow_proposal_request<T: store + key>(multi_signature: & MultiSignature,  proposal_id: &u256, _tx: & TxContext): &T {
@@ -288,7 +289,7 @@ module multisig::multisig {
         let reject_weight = proposal.reject_weight;
         assert!(approved_weight >= multi_signature.threshold || reject_weight >= multi_signature.threshold, ECanNotFinish);
         // if vote is approved, execute the change logic
-        if(approved_weight >= multi_signature.threshold){
+        if(approved_weight >= multi_signature.threshold && approved_weight > reject_weight){
             let len = vector::length<address>(&setting_request.participants_remove);
             let index: u64 = 0;
             let participants_by_weight = &mut multi_signature.participants_by_weight;
@@ -348,8 +349,8 @@ module multisig::multisig {
     }
 
     fun onlyVoted(multi_signature: & MultiSignature, proposal_id: u256){
-        let is_approved = is_proposal_approved(multi_signature, proposal_id);
-        let is_rejected = is_proposal_rejected(multi_signature, proposal_id);
+        let (is_approved,_) = is_proposal_approved(multi_signature, proposal_id);
+        let (is_rejected,_) = is_proposal_rejected(multi_signature, proposal_id);
         assert!(is_approved || is_rejected, ENotVoted);
     }
 

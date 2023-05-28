@@ -1,6 +1,6 @@
 #[test_only]
 module multisig::multisig_example_tests{
-    use multisig::multisig::{MultiSignature, EInvalidArguments, ENotAuthorized, EVoted, ECanNotFinish, ENotVoted};
+    use multisig::multisig::{MultiSignature, EInvalidArguments, ENotAuthorized, EVoted, ENotVoted};
     use multisig::Example::{Self, Vault};
     use sui::test_scenario::{Self, Scenario};
     use std::vector::{Self};
@@ -405,7 +405,7 @@ module multisig::multisig_example_tests{
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure(abort_code=ECanNotFinish)]
+    #[expected_failure(abort_code=ENotVoted)]
     #[test]
     public fun test_mint_multi_vote_direct_complete() {
 
