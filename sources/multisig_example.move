@@ -1,3 +1,4 @@
+#[test_only]
 module multisig::Example {
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID, UID};
@@ -43,10 +44,23 @@ module multisig::Example {
 
         assert!(multisig::is_participant(multi_signature, tx_context::sender(tx)), 1);
         if(multisig::is_proposal_approved(multi_signature, proposal_id)){
-            let request = multisig::borrow_proposal_request<MintRequest>(multi_signature, proposal_id, tx);
+            let request = multisig::borrow_proposal_request<MintRequest>(multi_signature, &proposal_id, tx);
             mint(request);
             multisig::multisig::mark_proposal_complete(multi_signature, proposal_id, tx);
         }
+    }
+
+    public fun mint_execute_vote_not_pass(_: &Vault,  multi_signature: &mut MultiSignature, proposal_id: u256,  tx: &mut TxContext){
+        // only vault for cashier
+
+        assert!(multisig::is_participant(multi_signature, tx_context::sender(tx)), 1);
+        let request = multisig::borrow_proposal_request<MintRequest>(multi_signature, &proposal_id, tx);
+        mint(request);
+        multisig::multisig::mark_proposal_complete(multi_signature, proposal_id, tx);
+    }
+
+    public fun complete(_: &Vault,  multi_signature: &mut MultiSignature, proposal_id: u256,  tx: &mut TxContext){
+        multisig::multisig::mark_proposal_complete(multi_signature, proposal_id, tx);
     }
 
     fun mint(_: &MintRequest){
