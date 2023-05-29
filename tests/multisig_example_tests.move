@@ -1,8 +1,9 @@
 #[test_only]
 module multisig::multisig_example_tests{
-    use multisig::multisig::{MultiSignature, EInvalidArguments, ENotAuthorized, EVoted, ENotVoted};
+    use multisig::multisig::{MultiSignature, EInvalidArguments, ENotAuthorized, EVoted, ENotVoted, EThresholdInvalid};
     use multisig::Example::{Self, Vault};
     use sui::test_scenario::{Self, Scenario};
+    use sui::vec_map::{Self};
     use std::vector::{Self};
     use std::debug;
     use std::ascii;
@@ -187,6 +188,64 @@ module multisig::multisig_example_tests{
             Example::init_for_testing(ctx);
         };
         change_setting(participant_vector(), weight_vector(), remove_vector(), 3, scenario);
+        let multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
+
+        let weights = multisig::multisig::get_participants_by_weight(&multi_sig);
+        multisig::multisig::debug_multisig(&multi_sig);
+        assert!(*vec_map::get<address, u64>(weights, &USER) == 3, 3);
+        assert!(*vec_map::get<address, u64>(weights, &PARTICIPANT1) == 2, 2);
+        test_scenario::return_shared(multi_sig);
+        test_scenario::end(scenario_val); 
+    }
+
+    #[expected_failure(abort_code = EThresholdInvalid)]
+    #[test]
+    public fun test_change_setting_threshold_greater_than_sum_fail(){
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+        change_setting(participant_vector(), weight_vector(), remove_vector(), 7, scenario);
+        test_scenario::end(scenario_val); 
+    }
+
+    #[expected_failure(abort_code = EThresholdInvalid)]
+    #[test]
+    public fun test_change_setting_threshold_less_than_min_fail(){
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+        let weight_v = vector::empty<u64>();
+        vector::push_back<u64>(&mut weight_v, 3);
+        vector::push_back<u64>(&mut weight_v, 2);
+        vector::push_back<u64>(&mut weight_v, 2);
+        change_setting(participant_vector(), weight_v, remove_vector(), 1, scenario);
+        test_scenario::end(scenario_val); 
+    }
+
+    #[expected_failure(abort_code = EInvalidArguments)]
+    #[test]
+    public fun test_change_setting_remove_not_exist_fail(){
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+        let remove = vector::empty<address>();
+        vector::push_back<address>(&mut remove, UNAUTHORIZED);
+        change_setting(participant_vector(), weight_vector(), remove, 1, scenario);
         test_scenario::end(scenario_val); 
     }
 

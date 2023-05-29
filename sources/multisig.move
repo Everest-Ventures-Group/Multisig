@@ -81,10 +81,20 @@ module multisig::multisig {
     }
 
     /// only participants can call multisig_setting_execute
+    /// only the one same type proposal can be in pending proposals waiting approval
     public fun create_proposal<T: store + key>(multi_signature: &mut MultiSignature, description: vector<u8>, type: u64, request: T, _tx: &mut TxContext){
-        onlyParticipant(multi_signature, _tx);
-        
         // only participants
+        onlyParticipant(multi_signature, _tx);
+        // check type, only one type can be processed at one time
+        let pending_proposals = &multi_signature.pending_proposals;
+        let proposals_ids = vec_map::keys<u256, Proposal>(pending_proposals);
+        let ids_ref = &mut proposals_ids;
+        while(vector::length(ids_ref)>0){
+            let key = vector::pop_back<u256>(ids_ref);
+            let proposal = vec_map::get(pending_proposals, &key);
+            assert!(proposal.type != type, EInvalidArguments);
+        };
+
         let value = object_bag::new(_tx);
         object_bag::add<u256, T>(&mut value, 0, request);
         let proposal_id = object::new(_tx);
@@ -99,6 +109,8 @@ module multisig::multisig {
     }
 
     /// only participants can call multisig_setting_execute
+    /// participants are newly added
+    /// participants_remove are going to be removed
     public entry fun create_multisig_setting_proposal(multi_signature: &mut MultiSignature, description: vector<u8>, participants: vector<address>, participant_weights: vector<u64>, participants_remove: vector<address>, threshold: u64, _tx: &mut TxContext){
         onlyParticipant(multi_signature, _tx);
         
@@ -108,23 +120,69 @@ module multisig::multisig {
         assert!(len == vector::length<u64>(participant_weights_ref), EInvalidArguments);
         assert!(len > 0, EInvalidArguments);
         // threshold should less than total weight subtract any single weight the make sure vote can proceed
-        let sum  = 0;
-        let index = 0;
-        // calculate sum of the weights
-        while(index < len){
-            sum = sum + *vector::borrow(&participant_weights, index);
-            index = index + 1;
+        let participants_by_weight = & multi_signature.participants_by_weight;
+        // copy a new setting to simulate
+        let copy_map = vec_map::empty<address, u64>();
+        let copy_map_ref = &mut copy_map;
+        let copy_keys = vec_map::keys<address, u64>( participants_by_weight);
+        let copy_keys_ref = &mut copy_keys;
+        while(vector::length(copy_keys_ref) > 0){
+            let key = vector::pop_back<address>(copy_keys_ref);
+            let v = vec_map::get<address, u64>( participants_by_weight, &key);
+            vec_map::insert<address, u64>( copy_map_ref, copy key, *v);
         };
-        let participants_by_weight: VecMap<address, u64> = vec_map::empty<address, u64>();
+
+        // check participants_remove should all exist
+        let remove_len = vector::length(&participants_remove);
+        let remove_index = 0;
+        while(remove_index < remove_len){
+            let key = vector::borrow<address>(&participants_remove, remove_index);
+            assert!(vec_map::contains(copy_map_ref, key), EInvalidArguments);
+            // simulate remove
+            vec_map::remove<address, u64>( copy_map_ref, key);
+            remove_index = remove_index + 1;
+        };
+
+        // simulate add
+        let add_len = vector::length(&participants);
+        let add_index = 0;
+        let new_participants_by_weight = vec_map::empty<address, u64>();
+        while(add_index < add_len){
+            let key = vector::borrow<address>(&participants, add_index);
+            let weight = vector::borrow<u64>(&participant_weights, add_index);
+            // each weight should > 0
+            assert!(*weight > 0, EInvalidArguments);
+            // update the old one
+            if(vec_map::contains(copy_map_ref, key)){
+                vec_map::remove<address, u64>(copy_map_ref, key);
+            };
+            vec_map::insert<address, u64>(copy_map_ref, *key, *weight);
+            vec_map::insert<address, u64>(&mut new_participants_by_weight, *key, *weight);
+            add_index = add_index +1;
+        };
+    
+        // make sure threshold >= min and threshold <= sum
         // reset index
-        index = 0;
-        while(index < len){
-            let value = vector::pop_back<u64>(&mut participant_weights);
-            assert!(threshold <= sum - value, EThresholdInvalid);
-            vec_map::insert(&mut participants_by_weight, vector::pop_back<address>(participant_ref), value);
-            index = index + 1;
+        let sum = 0;
+        let min = 0;
+        let keys = vec_map::keys<address, u64>( copy_map_ref);
+        let keys_ref = &mut keys;
+        while(vector::length(keys_ref) > 0){
+            let key = vector::pop_back<address>(keys_ref);
+            let v = vec_map::get<address, u64>( copy_map_ref, &key);
+            if (min == 0){
+                min = *v;
+            };
+            if(*v < min){
+                min = *v;
+            };
+            sum = sum + *v;
         };
-        let request = MultiSignatureSetting{ id: object::new(_tx),  participants_by_weight, participants_remove, threshold};
+        assert!(sum > 0, EInvalidArguments);
+        assert!(threshold >= min, EThresholdInvalid);
+        assert!(threshold <= sum, EThresholdInvalid);
+
+        let request = MultiSignatureSetting{ id: object::new(_tx),  participants_by_weight: new_participants_by_weight, participants_remove, threshold};
         create_proposal<MultiSignatureSetting>(multi_signature, description, PROPOSAL_TYPE_MULTISIG_SETTING, request, _tx)
     }
 
@@ -269,8 +327,12 @@ module multisig::multisig {
     }
 
     /// get participants of the multisig
-    public entry fun get_participants(multi_signature: &MultiSignature): vector<address>{
+    public fun get_participants(multi_signature: &MultiSignature): vector<address>{
         vec_map::keys<address, u64>(&multi_signature.participants_by_weight)
+    }
+
+    public fun get_participants_by_weight(multi_signature: &MultiSignature): &VecMap<address,  u64>{
+        &multi_signature.participants_by_weight
     }
 
     /// change the multisig setting
@@ -294,6 +356,7 @@ module multisig::multisig {
             let index: u64 = 0;
             let participants_by_weight = &mut multi_signature.participants_by_weight;
             let new_participants_by_weight = &setting_request.participants_by_weight;
+            // remove old weights
             while((index < len) && (vector::length(&setting_request.participants_remove) > 0)){
                 // remove the old participants
                 vec_map::remove<address, u64>( participants_by_weight, vector::borrow<address>(&setting_request.participants_remove, index));
@@ -301,20 +364,40 @@ module multisig::multisig {
             };
             let keys = vec_map::keys<address, u64>( new_participants_by_weight);
             let keys_ref = &mut keys;
-            let sum = 0;
+            // add new weights
             while(vector::length(keys_ref) > 0){
                 let key = vector::pop_back<address>(keys_ref);
                 let v = vec_map::get<address, u64>( new_participants_by_weight, &key);
                 // each weight should > 0
                 assert!(*v > 0, EInvalidArguments);
                 vec_map::insert<address, u64>( participants_by_weight, copy key, *v);
+            };
+
+            // calculate min and sum, make sure vote only effect in [minimal 1 vote, sum all votes]
+            keys = vec_map::keys<address, u64>( new_participants_by_weight);
+            keys_ref = &mut keys;
+            let sum = 0;
+            let min: u64 = 0;
+            while(vector::length(keys_ref) > 0){
+                let key = vector::pop_back<address>(keys_ref);
+                let v = vec_map::get<address, u64>( participants_by_weight, &key);
+                if(min == 0){
+                    min = *v;
+                };
+                if(*v <= min){
+                    min = *v;
+                };
+                assert!(*v > 0, EInvalidArguments);
                 sum = sum + *v;
             };
             // sum of weights should > 0
+            assert!(setting_request.threshold <= sum, EInvalidArguments);
+            assert!(setting_request.threshold >= min, EInvalidArguments);
+
             multi_signature.threshold = setting_request.threshold;
-            assert!(sum > 0, EInvalidArguments);
+
         };
-        // logic is rejected or execute logic finished
+        // proposal is dropped or execute logic finished
         inner_mark_proposal_complete(multi_signature, proposal_id, _tx);
     }
 
