@@ -5,6 +5,7 @@ module multisig::multisig {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::transfer::{Self};
+    use std::string;
     use sui::event;
 
     const EThresholdInvalid: u64 = 1;
@@ -112,7 +113,7 @@ module multisig::multisig {
     /// only participants can call multisig_setting_execute
     /// participants are newly added
     /// participants_remove are going to be removed
-    public entry fun create_multisig_setting_proposal(multi_signature: &mut MultiSignature, description: vector<u8>, participants: vector<address>, participant_weights: vector<u64>, participants_remove: vector<address>, threshold: u64, _tx: &mut TxContext){
+    public entry fun create_multisig_setting_proposal(multi_signature: &mut MultiSignature, participants: vector<address>, participant_weights: vector<u64>, participants_remove: vector<address>, threshold: u64, _tx: &mut TxContext){
         onlyParticipant(multi_signature, _tx);
         
         let participant_ref = &mut participants;
@@ -184,7 +185,8 @@ module multisig::multisig {
         assert!(threshold <= sum, EThresholdInvalid);
 
         let request = MultiSignatureSetting{ id: object::new(_tx),  participants_by_weight: new_participants_by_weight, participants_remove, threshold};
-        create_proposal<MultiSignatureSetting>(multi_signature, description, PROPOSAL_TYPE_MULTISIG_SETTING, request, _tx)
+        let description = sui::address::to_string(object::id_address(&request));
+        create_proposal<MultiSignatureSetting>(multi_signature, *string::bytes(&description), PROPOSAL_TYPE_MULTISIG_SETTING, request, _tx)
     }
 
     /// only participants can call multisig_setting_execute

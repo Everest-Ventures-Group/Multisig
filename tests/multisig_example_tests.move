@@ -94,7 +94,7 @@ module multisig::multisig_example_tests{
 
             let remove = vector::empty<address>();
             // create proposal using a unauthorized user
-            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, 3,test_scenario::ctx(scenario));
+            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, participants, participant_weights, remove, 3,test_scenario::ctx(scenario));
         };
         test_scenario::next_tx(scenario, USER);
         {
@@ -133,7 +133,7 @@ module multisig::multisig_example_tests{
 
             let remove = vector::empty<address>();
             // create proposal using a unauthorized user
-            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, 3, test_scenario::ctx(scenario));
+            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, participants, participant_weights, remove, 3, test_scenario::ctx(scenario));
         };
         
         // end
@@ -152,7 +152,7 @@ module multisig::multisig_example_tests{
             multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
             vault = test_scenario::take_shared<Vault>(scenario);
             // create proposal using a original user
-            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, threshold, test_scenario::ctx(scenario));
+            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, participants, participant_weights, remove, threshold, test_scenario::ctx(scenario));
         };
 
         // vote
