@@ -93,7 +93,7 @@ module multisig::multisig {
             let key = vector::pop_back<u256>(ids_ref);
             let proposal = vec_map::get(pending_proposals, &key);
             // only one with the same type in pending proposals
-            assert!(proposal.type == type, EInvalidArguments);
+            assert!(proposal.type != type, EInvalidArguments);
         };
 
         let value = object_bag::new(_tx);
