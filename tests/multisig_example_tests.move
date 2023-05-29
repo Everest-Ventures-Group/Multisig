@@ -1,8 +1,9 @@
 #[test_only]
 module multisig::multisig_example_tests{
-    use multisig::multisig::{MultiSignature, EInvalidArguments, ENotAuthorized, EVoted};
+    use multisig::multisig::{MultiSignature, EInvalidArguments, ENotAuthorized, EVoted, ENotVoted, EThresholdInvalid};
     use multisig::Example::{Self, Vault};
     use sui::test_scenario::{Self, Scenario};
+    use sui::vec_map::{Self};
     use std::vector::{Self};
     use std::debug;
     use std::ascii;
@@ -38,7 +39,7 @@ module multisig::multisig_example_tests{
         let proposal_id: u256;
         test_scenario::next_tx(scenario, user);
         {
-            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, user, test_scenario::ctx(scenario));
+            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, test_scenario::ctx(scenario));
             assert!(vector::length(&proposals) == 1, 1);
             proposal_id = vector::pop_back(&mut proposals);
         };
@@ -56,7 +57,7 @@ module multisig::multisig_example_tests{
         // execute
         test_scenario::next_tx(scenario, user);
         {
-            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, user, test_scenario::ctx(scenario));
+            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, test_scenario::ctx(scenario));
             assert!(vector::length(&proposals) == 0, 1);
 
         };
@@ -93,7 +94,7 @@ module multisig::multisig_example_tests{
 
             let remove = vector::empty<address>();
             // create proposal using a unauthorized user
-            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, test_scenario::ctx(scenario));
+            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, 3,test_scenario::ctx(scenario));
         };
         test_scenario::next_tx(scenario, USER);
         {
@@ -132,7 +133,7 @@ module multisig::multisig_example_tests{
 
             let remove = vector::empty<address>();
             // create proposal using a unauthorized user
-            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, test_scenario::ctx(scenario));
+            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, 3, test_scenario::ctx(scenario));
         };
         
         // end
@@ -142,7 +143,7 @@ module multisig::multisig_example_tests{
         test_scenario::end(scenario_val);
     }
 
-    fun change_setting(participants: vector<address>, participant_weights: vector<u64>,  remove: vector<address>, scenario: &mut Scenario ){
+    fun change_setting(participants: vector<address>, participant_weights: vector<u64>,  remove: vector<address>, threshold: u64, scenario: &mut Scenario ){
         let multi_sig: MultiSignature;
         let vault: Vault;
         // change request
@@ -151,7 +152,7 @@ module multisig::multisig_example_tests{
             multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
             vault = test_scenario::take_shared<Vault>(scenario);
             // create proposal using a original user
-            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, test_scenario::ctx(scenario));
+            multisig::multisig::create_multisig_setting_proposal(&mut multi_sig, b"propose from B", participants, participant_weights, remove, threshold, test_scenario::ctx(scenario));
         };
 
         // vote
@@ -162,6 +163,7 @@ module multisig::multisig_example_tests{
         // execute
         test_scenario::next_tx(scenario, USER);
         {
+            multisig::multisig::debug_multisig(&multi_sig);
             multisig::multisig::multisig_setting_execute(&mut multi_sig, 0, test_scenario::ctx(scenario));
         };
          
@@ -185,7 +187,65 @@ module multisig::multisig_example_tests{
             let ctx = test_scenario::ctx(scenario);
             Example::init_for_testing(ctx);
         };
-        change_setting(participant_vector(), weight_vector(), remove_vector(), scenario);
+        change_setting(participant_vector(), weight_vector(), remove_vector(), 3, scenario);
+        let multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
+
+        let weights = multisig::multisig::get_participants_by_weight(&multi_sig);
+        multisig::multisig::debug_multisig(&multi_sig);
+        assert!(*vec_map::get<address, u64>(weights, &USER) == 3, 3);
+        assert!(*vec_map::get<address, u64>(weights, &PARTICIPANT1) == 2, 2);
+        test_scenario::return_shared(multi_sig);
+        test_scenario::end(scenario_val); 
+    }
+
+    #[expected_failure(abort_code = EThresholdInvalid)]
+    #[test]
+    public fun test_change_setting_threshold_greater_than_sum_fail(){
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+        change_setting(participant_vector(), weight_vector(), remove_vector(), 7, scenario);
+        test_scenario::end(scenario_val); 
+    }
+
+    #[expected_failure(abort_code = EThresholdInvalid)]
+    #[test]
+    public fun test_change_setting_threshold_less_than_min_fail(){
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+        let weight_v = vector::empty<u64>();
+        vector::push_back<u64>(&mut weight_v, 3);
+        vector::push_back<u64>(&mut weight_v, 2);
+        vector::push_back<u64>(&mut weight_v, 2);
+        change_setting(participant_vector(), weight_v, remove_vector(), 1, scenario);
+        test_scenario::end(scenario_val); 
+    }
+
+    #[expected_failure(abort_code = EInvalidArguments)]
+    #[test]
+    public fun test_change_setting_remove_not_exist_fail(){
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+        let remove = vector::empty<address>();
+        vector::push_back<address>(&mut remove, UNAUTHORIZED);
+        change_setting(participant_vector(), weight_vector(), remove, 1, scenario);
         test_scenario::end(scenario_val); 
     }
 
@@ -203,7 +263,7 @@ module multisig::multisig_example_tests{
         let multi_sig: MultiSignature;
         let vault: Vault;
 
-        change_setting(participant_vector(), weight_vector(), remove_vector(), scenario);
+        change_setting(participant_vector(), weight_vector(), remove_vector(), 3, scenario);
         // now weight is user1: 1,  user2: 2, user3: 3
         // begin to vote
         multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
@@ -216,7 +276,7 @@ module multisig::multisig_example_tests{
         let proposal_id: u256;
         // vote1
         {
-            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, USER, test_scenario::ctx(scenario));
+            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, test_scenario::ctx(scenario));
             assert!(vector::length(&proposals) == 1, 1);
             proposal_id = vector::pop_back(&mut proposals);
         };
@@ -261,7 +321,7 @@ module multisig::multisig_example_tests{
         let multi_sig: MultiSignature;
         let vault: Vault;
 
-        change_setting(participant_vector(), weight_vector(), remove_vector(), scenario);
+        change_setting(participant_vector(), weight_vector(), remove_vector(), 3,scenario);
         // now weight is user1: 1,  user2: 2, user3: 3
         // begin to vote
         multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
@@ -274,7 +334,7 @@ module multisig::multisig_example_tests{
         let proposal_id: u256;
         // vote1
         {
-            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, USER, test_scenario::ctx(scenario));
+            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, test_scenario::ctx(scenario));
             assert!(vector::length(&proposals) == 1, 1);
             proposal_id = vector::pop_back(&mut proposals);
         };
@@ -315,7 +375,7 @@ module multisig::multisig_example_tests{
         let multi_sig: MultiSignature;
         let vault: Vault;
 
-        change_setting(participant_vector(), weight_vector(), remove_vector(), scenario);
+        change_setting(participant_vector(), weight_vector(), remove_vector(), 3, scenario);
         // now weight is user1: 1,  user2: 2, user3: 3
         // begin to vote
         multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
@@ -328,7 +388,7 @@ module multisig::multisig_example_tests{
         let proposal_id: u256;
         // vote1
         {
-            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, USER, test_scenario::ctx(scenario));
+            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, test_scenario::ctx(scenario));
             assert!(vector::length(&proposals) == 1, 1);
             proposal_id = vector::pop_back(&mut proposals);
         };
@@ -354,6 +414,106 @@ module multisig::multisig_example_tests{
         test_scenario::end(scenario_val);
     }
 
+    #[expected_failure(abort_code=ENotVoted)]
+    #[test]
+    public fun test_mint_multi_vote_threshold_not_reach() {
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;  
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+
+        let multi_sig: MultiSignature;
+        let vault: Vault;
+
+        change_setting(participant_vector(), weight_vector(), remove_vector(), 3, scenario);
+        // now weight is USER: 3,  PARTICIPANT1: 2, PARTICIPANT2: 1
+        // begin to vote
+        multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
+        vault = test_scenario::take_shared<Vault>(scenario);
+        test_scenario::next_tx(scenario, USER);
+        {
+            multisig::Example::mint_request(&vault, &mut multi_sig, USER, 100, test_scenario::ctx(scenario));
+        };
+
+        // weight 2
+        test_scenario::next_tx(scenario, PARTICIPANT1);
+        let proposal_id: u256;
+        // PARTICIPANT1 vote 2
+        {
+            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, test_scenario::ctx(scenario));
+            assert!(vector::length(&proposals) == 1, 1);
+            proposal_id = vector::pop_back(&mut proposals);
+        };
+        test_scenario::next_tx(scenario, PARTICIPANT1);
+        {
+            multisig::multisig::vote(&mut multi_sig, proposal_id, true, test_scenario::ctx(scenario));
+        };
+
+        // execute
+        test_scenario::next_tx(scenario, PARTICIPANT2);
+        {
+            multisig::Example::mint_execute_vote_not_pass(&vault,&mut multi_sig, proposal_id, test_scenario::ctx(scenario));
+        };
+    
+        test_scenario::return_shared(multi_sig);
+        test_scenario::return_shared(vault);
+        test_scenario::end(scenario_val);
+    }
+
+    #[expected_failure(abort_code=ENotVoted)]
+    #[test]
+    public fun test_mint_multi_vote_direct_complete() {
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;  
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+
+        let multi_sig: MultiSignature;
+        let vault: Vault;
+
+        change_setting(participant_vector(), weight_vector(), remove_vector(), 3, scenario);
+        // now weight is USER: 3,  PARTICIPANT1: 2, PARTICIPANT2: 1
+        // begin to vote
+        multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
+        vault = test_scenario::take_shared<Vault>(scenario);
+        test_scenario::next_tx(scenario, USER);
+        {
+            multisig::Example::mint_request(&vault, &mut multi_sig, USER, 100, test_scenario::ctx(scenario));
+        };
+
+        // weight 2
+        test_scenario::next_tx(scenario, PARTICIPANT1);
+        let proposal_id: u256;
+        // PARTICIPANT1 vote 2
+        {
+            let proposals = multisig::multisig::pending_proposals(&mut multi_sig, test_scenario::ctx(scenario));
+            assert!(vector::length(&proposals) == 1, 1);
+            proposal_id = vector::pop_back(&mut proposals);
+        };
+        test_scenario::next_tx(scenario, PARTICIPANT1);
+        {
+            multisig::multisig::vote(&mut multi_sig, proposal_id, true, test_scenario::ctx(scenario));
+        };
+
+        // execute
+        test_scenario::next_tx(scenario, PARTICIPANT2);
+        {
+            multisig::Example::complete(&vault,&mut multi_sig, proposal_id, test_scenario::ctx(scenario));
+        };
+    
+        test_scenario::return_shared(multi_sig);
+        test_scenario::return_shared(vault);
+        test_scenario::end(scenario_val);
+    }
+
     fun participant_vector(): vector<address>{
         let participants = vector::empty<address>();
         vector::push_back<address>(&mut participants, USER);
@@ -364,9 +524,9 @@ module multisig::multisig_example_tests{
 
     fun weight_vector(): vector<u64>{
         let weight_v = vector::empty<u64>();
-        vector::push_back<u64>(&mut weight_v, 1);
-        vector::push_back<u64>(&mut weight_v, 2);
         vector::push_back<u64>(&mut weight_v, 3);
+        vector::push_back<u64>(&mut weight_v, 2);
+        vector::push_back<u64>(&mut weight_v, 1);
         weight_v
     }
 
