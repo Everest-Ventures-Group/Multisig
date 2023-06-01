@@ -128,6 +128,7 @@ module multisig::multisig {
         let copy_map_ref = &mut copy_map;
         let copy_keys = vec_map::keys<address, u64>( participants_by_weight);
         let copy_keys_ref = &mut copy_keys;
+        // do copy 
         while(vector::length(copy_keys_ref) > 0){
             let key = vector::pop_back<address>(copy_keys_ref);
             let v = vec_map::get<address, u64>( participants_by_weight, &key);
@@ -373,11 +374,15 @@ module multisig::multisig {
                 let v = vec_map::get<address, u64>( new_participants_by_weight, &key);
                 // each weight should > 0
                 assert!(*v > 0, EInvalidArguments);
+                // update the old one
+                if(vec_map::contains(participants_by_weight, &key)){
+                    vec_map::remove<address, u64>(participants_by_weight, &key);
+                };
                 vec_map::insert<address, u64>( participants_by_weight, copy key, *v);
             };
 
-            // calculate min and sum, make sure vote only effect in [minimal 1 vote, sum all votes]
-            keys = vec_map::keys<address, u64>( new_participants_by_weight);
+            // calculate min and sum, make sure vote only effect in [minimal 1 vote, sum all votes], do final check
+            keys = vec_map::keys<address, u64>( participants_by_weight);
             keys_ref = &mut keys;
             let sum = 0;
             let min: u64 = 0;

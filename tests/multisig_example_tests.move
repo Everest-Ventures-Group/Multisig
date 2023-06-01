@@ -11,6 +11,8 @@ module multisig::multisig_example_tests{
     const PARTICIPANT1: address = @0xB; // weight 2
     const PARTICIPANT2: address = @0xC; // weight 3
     const UNAUTHORIZED: address = @0xD; // UNAUTHORIZED USER
+    const PARTICIPANT3: address = @0xE; // weight 2
+    const PARTICIPANT4: address = @0xF; // weight 3
 
     #[test]
     public fun test_mint_single() {
@@ -194,6 +196,28 @@ module multisig::multisig_example_tests{
         multisig::multisig::debug_multisig(&multi_sig);
         assert!(*vec_map::get<address, u64>(weights, &USER) == 3, 3);
         assert!(*vec_map::get<address, u64>(weights, &PARTICIPANT1) == 2, 2);
+        test_scenario::return_shared(multi_sig);
+        test_scenario::end(scenario_val); 
+    }
+
+
+    #[test]
+    public fun test_change_setting_new_success(){
+
+        let scenario_val = test_scenario::begin(USER);
+        let scenario = &mut scenario_val;
+        // init
+        {
+            let ctx = test_scenario::ctx(scenario);
+            Example::init_for_testing(ctx);
+        };
+        change_setting(participant_vector_new(), weight_vector(), remove_vector(), 3, scenario);
+        let multi_sig = test_scenario::take_shared<MultiSignature>(scenario);
+
+        let weights = multisig::multisig::get_participants_by_weight(&multi_sig);
+        multisig::multisig::debug_multisig(&multi_sig);
+        assert!(*vec_map::get<address, u64>(weights, &USER) == 3, 3);
+        assert!(*vec_map::get<address, u64>(weights, &PARTICIPANT3) == 2, 2);
         test_scenario::return_shared(multi_sig);
         test_scenario::end(scenario_val); 
     }
@@ -519,6 +543,14 @@ module multisig::multisig_example_tests{
         vector::push_back<address>(&mut participants, USER);
         vector::push_back<address>(&mut participants, PARTICIPANT1);
         vector::push_back<address>(&mut participants, PARTICIPANT2);
+        participants
+    }
+
+    fun participant_vector_new(): vector<address>{
+        let participants = vector::empty<address>();
+        vector::push_back<address>(&mut participants, USER);
+        vector::push_back<address>(&mut participants, PARTICIPANT3);
+        vector::push_back<address>(&mut participants, PARTICIPANT4);
         participants
     }
 
