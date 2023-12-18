@@ -7,7 +7,7 @@ version = "0.0.2"
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "mainnet" }
 
 [addresses]
-# multisig = "0x0"
+ multisig = "0x0"
 Sui = "0000000000000000000000000000000000000000000000000000000000000002"
 #multisig = "0x0440e87f9bfb2a33d24e23011e8cdff710e1f4b37203b33ca7c9452462640085"
 
